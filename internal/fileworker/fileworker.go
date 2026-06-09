@@ -1,30 +1,31 @@
 package fileworker
 
 import (
-	//"fmt"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 )
 
-// type File struct { for future upd
-// 	filename string
-// 	filepath string
-// 	dateest  string
-// }
+type File struct {
+	filename string
+	filepath string
+	dateest  string
+}
 
 func moveFileToFolder(filePath, folderName string) error {
-	// 1. Создаем путь к новому местоположению файла
+	// Создаем путь к новому местоположению файла
 	destDir := filepath.Join(filepath.Dir(filePath), folderName)
 	destPath := filepath.Join(destDir, filepath.Base(filePath))
 
-	// 0755 - стандартные права для папок.
+	// MkdirAll НЕ выдает ошибку, если папка уже существует
 	err := os.MkdirAll(destDir, 0755)
 	if err != nil {
 		return fmt.Errorf("не удалось создать папку %s: %w", destDir, err)
 	}
 
+	// Перемещаем файл
 	err = os.Rename(filePath, destPath)
 	if err != nil {
 		return fmt.Errorf("не удалось переместить файл %s в %s: %w", filePath, destPath, err)
@@ -32,42 +33,48 @@ func moveFileToFolder(filePath, folderName string) error {
 
 	return nil
 }
+
 func checkFileFormat(filename string) string {
-	//fmt.Print(filename, "\n")
+	// Безопасное получение расширения файла
 	path_splited := strings.Split(filename, "/")
 	pointed_file := path_splited[len(path_splited)-1]
-	//fmt.Print(pointed_file)
 
-	file_format := strings.Split(pointed_file, ".")[1]
-	if file_format != "" {
-		return file_format
+	parts := strings.Split(pointed_file, ".")
+	if len(parts) < 2 {
+		return "" // нет расширения
 	}
-	return ""
+
+	return parts[len(parts)-1]
 }
+
 func FileSorter(path *string) {
 	var files []string
 	filepath.WalkDir(*path, func(path string, d os.DirEntry, err error) error {
-		files = append(files, path)
+		if !d.IsDir() { // Добавляем только файлы, пропускаем папки
+			files = append(files, path)
+		}
 		return nil
 	})
 
+	var wg sync.WaitGroup
+
 	for i := range files {
-		if i == 0 { //wtf
-			continue
-		}
-		file_format := checkFileFormat(files[i])
-
-		switch file_format {
-		case "md", "txt", "pdf", "doc", "docx", "xlsx", "xls":
-			moveFileToFolder(files[i], "Documents")
-		case "mp4", "avi", "mkv", "mov":
-			moveFileToFolder(files[i], "Videos")
-		case "jpg", "png", "gif", "webp":
-			moveFileToFolder(files[i], "Images")
-		default:
-			moveFileToFolder(files[i], "Others")
-
-		}
-
+		wg.Add(1)
+		go func(filePath string) {
+			defer wg.Done()
+			file_format := checkFileFormat(filePath)
+			switch file_format {
+			case "md", "txt", "pdf", "doc", "docx", "xlsx", "xls":
+				moveFileToFolder(filePath, "Documents")
+			case "mp4", "avi", "mkv", "mov":
+				moveFileToFolder(filePath, "Videos")
+			case "jpg", "png", "gif", "webp":
+				moveFileToFolder(filePath, "Images")
+			default:
+				moveFileToFolder(filePath, "Others")
+			}
+		}(files[i]) //  это  корчое передается  в горутину значение
 	}
+
+	wg.Wait()
 }
