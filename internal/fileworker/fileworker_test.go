@@ -1,6 +1,7 @@
 package fileworker
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -223,10 +224,11 @@ func TestFileSorterConcurrency(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	// Создаем много файлов
+	// Создаем много файлов с уникальными именами
 	numFiles := 100
 	for i := 0; i < numFiles; i++ {
-		fileName := filepath.Join(tempDir, "file_%d.txt")
+		// ИСПРАВЛЕНО: используем fmt.Sprintf для форматирования имени
+		fileName := filepath.Join(tempDir, fmt.Sprintf("file_%d.txt", i))
 		err := os.WriteFile(fileName, []byte("content"), 0644)
 		if err != nil {
 			t.Fatal(err)
